@@ -800,20 +800,10 @@ void LcdDisplay::SetupUI() {
     lv_obj_set_flex_flow(content_, LV_FLEX_FLOW_COLUMN); // 垂直布局（从上到下）
     lv_obj_set_flex_align(content_, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_SPACE_EVENLY); // 子对象居中对齐，等距分布
 
-    emoji_box_ = lv_obj_create(content_);
-    lv_obj_set_size(emoji_box_, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
-    lv_obj_set_style_bg_opa(emoji_box_, LV_OPA_TRANSP, 0);
-    lv_obj_set_style_pad_all(emoji_box_, 0, 0);
-    lv_obj_set_style_border_width(emoji_box_, 0, 0);
-
-    emoji_label_ = lv_label_create(emoji_box_);
-    lv_obj_set_style_text_font(emoji_label_, large_icon_font, 0);
-    lv_obj_set_style_text_color(emoji_label_, lvgl_theme->text_color(), 0);
-    lv_label_set_text(emoji_label_, FONT_AWESOME_MICROCHIP_AI);
-
-    emoji_image_ = lv_img_create(emoji_box_);
-    lv_obj_center(emoji_image_);
-    lv_obj_add_flag(emoji_image_, LV_OBJ_FLAG_HIDDEN);
+    // Смайлик отключён
+    emoji_box_ = nullptr;
+    emoji_label_ = nullptr;
+    emoji_image_ = nullptr;
 
     preview_image_ = lv_image_create(content_);
     lv_obj_set_size(preview_image_, width_ / 2, height_ / 2);
@@ -826,7 +816,19 @@ void LcdDisplay::SetupUI() {
     lv_label_set_long_mode(chat_message_label_, LV_LABEL_LONG_WRAP); // 设置为自动换行模式
     lv_obj_set_style_text_align(chat_message_label_, LV_TEXT_ALIGN_CENTER, 0); // 设置文本居中对齐
     lv_obj_set_style_text_color(chat_message_label_, lvgl_theme->text_color(), 0);
+        /* Часы — большой шрифт */
+    clock_label_ = lv_label_create(content_);
+    lv_label_set_text(clock_label_, "--:--");
+    lv_obj_set_style_text_font(clock_label_, &font_clock_80, 0);
+    lv_obj_set_style_text_color(clock_label_, lvgl_theme->text_color(), 0);
+    lv_obj_set_style_text_align(clock_label_, LV_TEXT_ALIGN_CENTER, 0);
 
+    /* Дата — под часами */
+    date_label_ = lv_label_create(content_);
+    lv_label_set_text(date_label_, "--.--.----");
+    lv_obj_set_style_text_font(date_label_, &BUILTIN_TEXT_FONT, 0);
+    lv_obj_set_style_text_color(date_label_, lvgl_theme->text_color(), 0);
+    lv_obj_set_style_text_align(date_label_, LV_TEXT_ALIGN_CENTER, 0);
     /* Status bar */
     network_label_ = lv_label_create(status_bar_);
     lv_label_set_text(network_label_, "");
@@ -916,6 +918,33 @@ void LcdDisplay::SetChatMessage(const char* role, const char* content) {
     lv_label_set_text(chat_message_label_, content);
 }
 #endif
+
+void LcdDisplay::UpdateStatusBar(bool update_all) {
+    DisplayLockGuard lock(this);
+    if (clock_label_ == nullptr || date_label_ == nullptr) {
+        return;
+    }
+
+    // Получаем текущее время
+    time_t now;
+    struct tm timeinfo;
+    time(&now);
+setenv("TZ", "UTC0", 1);
+    tzset();
+    localtime_r(&now, &timeinfo);
+
+    // Обновляем часы
+    char time_str[8];
+    snprintf(time_str, sizeof(time_str), "%02d:%02d",
+             timeinfo.tm_hour, timeinfo.tm_min);
+    lv_label_set_text(clock_label_, time_str);
+
+    // Обновляем дату
+    char date_str[32];
+    snprintf(date_str, sizeof(date_str), "%02d.%02d.%04d",
+             timeinfo.tm_mday, timeinfo.tm_mon + 1, timeinfo.tm_year + 1900);
+    lv_label_set_text(date_label_, date_str);
+}
 
 void LcdDisplay::SetEmotion(const char* emotion) {
     // Stop any running GIF animation
@@ -1031,8 +1060,7 @@ void LcdDisplay::SetTheme(Theme* theme) {
     lv_obj_set_style_text_color(notification_label_, lvgl_theme->text_color(), 0);
     lv_obj_set_style_text_color(mute_label_, lvgl_theme->text_color(), 0);
     lv_obj_set_style_text_color(battery_label_, lvgl_theme->text_color(), 0);
-    lv_obj_set_style_text_color(emoji_label_, lvgl_theme->text_color(), 0);
-
+    // emoji_label_ отключён — пропускаем
     // Set content background opacity
     lv_obj_set_style_bg_opa(content_, LV_OPA_TRANSP, 0);
 
@@ -1119,3 +1147,31 @@ void LcdDisplay::SetTheme(Theme* theme) {
     // No errors occurred. Save theme to settings
     Display::SetTheme(lvgl_theme);
 }
+
+void LcdDisplay::UpdateClock() {
+    if (clock_label_ == nullptr || date_label_ == nullptr) {
+        return;
+    }
+
+    DisplayLockGuard lock(this);
+
+    time_t now = time(NULL);
+    struct tm timeinfo;
+    localtime_r(&now, &timeinfo);
+
+    if (timeinfo.tm_year < 2025 - 1900) {
+        return;  // Время ещё не установлено
+    }
+
+    // Часы
+    char time_str[8];
+    snprintf(time_str, sizeof(time_str), "%02d:%02d", timeinfo.tm_hour, timeinfo.tm_min);
+    lv_label_set_text(clock_label_, time_str);
+
+    // Дата
+    char date_str[32];
+    snprintf(date_str, sizeof(date_str), "%02d.%02d.%04d",
+             timeinfo.tm_mday, timeinfo.tm_mon + 1, timeinfo.tm_year + 1900);
+    lv_label_set_text(date_label_, date_str);
+}
+

@@ -6,6 +6,7 @@
 
 #include <esp_lcd_panel_io.h>
 #include <esp_lcd_panel_ops.h>
+LV_FONT_DECLARE(font_clock_80);
 #include <font_emoji.h>
 
 #include <atomic>
@@ -18,10 +19,11 @@ class LcdDisplay : public LvglDisplay {
 protected:
     esp_lcd_panel_io_handle_t panel_io_ = nullptr;
     esp_lcd_panel_handle_t panel_ = nullptr;
-    
     lv_draw_buf_t draw_buf_;
     lv_obj_t* status_bar_ = nullptr;
     lv_obj_t* content_ = nullptr;
+    lv_obj_t* clock_label_ = nullptr;
+    lv_obj_t* date_label_ = nullptr;
     lv_obj_t* container_ = nullptr;
     lv_obj_t* side_bar_ = nullptr;
     lv_obj_t* preview_image_ = nullptr;
@@ -37,6 +39,7 @@ protected:
     void SetupUI();
     virtual bool Lock(int timeout_ms = 0) override;
     virtual void Unlock() override;
+    virtual void UpdateStatusBar(bool update_all = false) override;
 
 protected:
     // 添加protected构造函数
@@ -47,6 +50,7 @@ public:
     virtual void SetEmotion(const char* emotion) override;
     virtual void SetChatMessage(const char* role, const char* content) override; 
     virtual void SetPreviewImage(std::unique_ptr<LvglImage> image) override;
+    virtual void UpdateClock() override;
 
     // Add theme switching function
     virtual void SetTheme(Theme* theme) override;
