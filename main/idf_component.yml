@@ -99,3 +99,5 @@ dependencies:
   ## Required IDF version
   idf:
     version: '>=5.4.0'
+  waveshare/pcf85063a:
+    version: "~2.0.0"

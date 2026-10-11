@@ -12,7 +12,7 @@
 #include "backlight.h"
 #include "camera.h"
 #include "assets.h"
-
+#include "driver/i2c_master.h"
 
 void* create_board();
 class AudioCodec;
@@ -39,6 +39,7 @@ public:
     virtual std::string GetBoardType() = 0;
     virtual std::string GetUuid() { return uuid_; }
     virtual Backlight* GetBacklight() { return nullptr; }
+    virtual i2c_master_bus_handle_t GetI2cBus() { return nullptr; }
     virtual Led* GetLed();
     virtual AudioCodec* GetAudioCodec() = 0;
     virtual bool GetTemperature(float& esp32temp);

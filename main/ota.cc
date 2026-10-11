@@ -1,3 +1,4 @@
+#include "display/rtc_manager.h"
 #include "ota.h"
 #include "system_info.h"
 #include "settings.h"
@@ -201,6 +202,13 @@ bool Ota::CheckVersion() {
             tv.tv_usec = (suseconds_t)((long long)ts % 1000) * 1000;  // 剩余的毫秒转换为微秒
             settimeofday(&tv, NULL);
             has_server_time_ = true;
+
+            // Записываем время в RTC
+            extern bool rtc_manager_write(const struct tm *time);
+            time_t now_rtc = time(NULL);
+            struct tm timeinfo_rtc;
+            localtime_r(&now_rtc, &timeinfo_rtc);
+            rtc_manager_write(&timeinfo_rtc);
         }
     } else {
         ESP_LOGW(TAG, "No server_time section found!");

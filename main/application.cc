@@ -1,3 +1,4 @@
+#include "display/rtc_manager.h"
 #include "application.h"
 #include "board.h"
 #include "display.h"
@@ -381,6 +382,18 @@ void Application::Start() {
     /* Start the clock timer to update the status bar */
     esp_timer_start_periodic(clock_timer_handle_, 1000000);
 
+    // Читаем время из RTC до подключения к Wi-Fi
+    if (rtc_manager_is_valid()) {
+        struct tm rtc_time;
+        if (rtc_manager_read(&rtc_time)) {
+            time_t t = mktime(&rtc_time);
+            struct timeval tv = { .tv_sec = t, .tv_usec = 0 };
+            settimeofday(&tv, NULL);
+            ESP_LOGI(TAG, "Time restored from RTC: %s", asctime(&rtc_time));
+        }
+    } else {
+        ESP_LOGW(TAG, "RTC time invalid, waiting for NTP");
+    }
     /* Wait for the network to be ready */
     board.StartNetwork();
 

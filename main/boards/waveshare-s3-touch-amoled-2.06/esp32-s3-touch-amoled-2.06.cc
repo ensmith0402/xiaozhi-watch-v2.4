@@ -140,10 +140,10 @@ private:
     PowerSaveTimer* power_save_timer_;
 
     void InitializePowerSaveTimer() {
-        power_save_timer_ = new PowerSaveTimer(-1, 60, 300);
+        power_save_timer_ = new PowerSaveTimer(-1, 10, 300);
         power_save_timer_->OnEnterSleepMode([this]() {
             GetDisplay()->SetPowerSaveMode(true);
-            GetBacklight()->SetBrightness(20); });
+            GetBacklight()->SetBrightness(0); });
         power_save_timer_->OnExitSleepMode([this]() {
             GetDisplay()->SetPowerSaveMode(false);
             GetBacklight()->RestoreBrightness(); });
@@ -321,6 +321,9 @@ public:
         return backlight_;
     }
 
+    virtual i2c_master_bus_handle_t GetI2cBus() override {
+        return i2c_bus_;
+    }
     virtual bool GetBatteryLevel(int &level, bool &charging, bool &discharging) override {
         static bool last_discharging = false;
         charging = pmic_->IsCharging();

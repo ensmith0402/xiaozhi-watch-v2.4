@@ -9,6 +9,7 @@
 
 #include "application.h"
 #include "system_info.h"
+#include "display/rtc_manager.h"
 
 #define TAG "main"
 
@@ -25,6 +26,12 @@ extern "C" void app_main(void)
         ret = nvs_flash_init();
     }
     ESP_ERROR_CHECK(ret);
+
+    // Инициализация RTC (PCF85063A)
+    esp_err_t rtc_ret = rtc_manager_init();
+    if (rtc_ret != ESP_OK) {
+        ESP_LOGW(TAG, "RTC init failed: %s", esp_err_to_name(rtc_ret));
+    }
 
     // Launch the application
     auto& app = Application::GetInstance();
