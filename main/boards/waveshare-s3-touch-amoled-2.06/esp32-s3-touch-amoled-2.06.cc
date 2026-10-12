@@ -22,6 +22,9 @@
 #include <esp_lcd_touch_ft5x06.h>
 #include <esp_lvgl_port.h>
 #include <lvgl.h>
+#include "driver/rtc_io.h"
+#include <esp_sleep.h>
+#include "esp_wifi.h"
 
 #define TAG "WaveshareEsp32s3TouchAMOLED2inch06"
 
@@ -140,7 +143,7 @@ private:
     PowerSaveTimer* power_save_timer_;
 
     void InitializePowerSaveTimer() {
-        power_save_timer_ = new PowerSaveTimer(-1, 10, 300);
+        power_save_timer_ = new PowerSaveTimer(-1, 10, 120);
         power_save_timer_->OnEnterSleepMode([this]() {
             GetDisplay()->SetPowerSaveMode(true);
             GetBacklight()->SetBrightness(0); });
@@ -148,8 +151,8 @@ private:
             GetDisplay()->SetPowerSaveMode(false);
             GetBacklight()->RestoreBrightness(); });
         power_save_timer_->OnShutdownRequest([this](){ 
-            pmic_->PowerOff(); });
-        power_save_timer_->SetEnabled(true);
+            EnterDeepSleep(); });
+        power_save_timer_->SetEnabled(true);  // Включаем таймер сразу
     }
 
     void InitializeCodecI2c() {
@@ -282,6 +285,25 @@ private:
                 ResetWifiConfiguration();
                 return true;
             });
+    }
+
+    void EnterDeepSleep() {
+        ESP_LOGI(TAG, "Entering deep sleep. Press BOOT to wake up.");
+
+        // Отключаем подсветку
+        GetBacklight()->SetBrightness(0);
+
+        // Настраиваем пробуждение по кнопке BOOT (GPIO0, активный низкий уровень)
+        const uint64_t wake_mask = 1ULL << BOOT_BUTTON_GPIO;  // GPIO0
+        esp_sleep_enable_ext1_wakeup(wake_mask, ESP_EXT1_WAKEUP_ANY_LOW);
+
+        // Важно: включаем подтяжку к питанию на RTC-пине
+        rtc_gpio_pullup_en((gpio_num_t)BOOT_BUTTON_GPIO);
+        rtc_gpio_pulldown_dis((gpio_num_t)BOOT_BUTTON_GPIO);
+
+        // Уходим в сон
+        esp_wifi_stop();  // Отключаем Wi-Fi перед глубоким сном
+        esp_deep_sleep_start();
     }
 
 public:

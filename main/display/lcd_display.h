@@ -24,6 +24,8 @@ protected:
     lv_obj_t* content_ = nullptr;
     lv_obj_t* clock_label_ = nullptr;
     lv_obj_t* date_label_ = nullptr;
+    lv_obj_t* weekday_label_ = nullptr;
+    lv_obj_t* battery_main_label_ = nullptr;
     lv_obj_t* container_ = nullptr;
     lv_obj_t* side_bar_ = nullptr;
     lv_obj_t* preview_image_ = nullptr;

@@ -71,7 +71,7 @@ LcdDisplay::LcdDisplay(esp_lcd_panel_io_handle_t panel_io, esp_lcd_panel_handle_
 
     // Load theme from settings
     Settings settings("display", false);
-    std::string theme_name = settings.GetString("theme", "light");
+    std::string theme_name = settings.GetString("theme", "dark");
     current_theme_ = LvglThemeManager::GetInstance().GetTheme(theme_name);
 
     // Create a timer to hide the preview image
@@ -829,6 +829,21 @@ void LcdDisplay::SetupUI() {
     lv_obj_set_style_text_font(date_label_, &BUILTIN_TEXT_FONT, 0);
     lv_obj_set_style_text_color(date_label_, lvgl_theme->text_color(), 0);
     lv_obj_set_style_text_align(date_label_, LV_TEXT_ALIGN_CENTER, 0);
+    
+    /* День недели — под датой */
+    weekday_label_ = lv_label_create(content_);
+    lv_label_set_text(weekday_label_, "");
+    lv_obj_set_style_text_font(weekday_label_, &BUILTIN_TEXT_FONT, 0);
+    lv_obj_set_style_text_color(weekday_label_, lvgl_theme->text_color(), 0);
+    lv_obj_set_style_text_align(weekday_label_, LV_TEXT_ALIGN_CENTER, 0);
+    
+    /* Батарея — под днём недели */
+    battery_main_label_ = lv_label_create(content_);
+    lv_label_set_text(battery_main_label_, "");
+    lv_obj_set_style_text_font(battery_main_label_, &BUILTIN_TEXT_FONT, 0);
+    lv_obj_set_style_text_color(battery_main_label_, lvgl_theme->text_color(), 0);
+    lv_obj_set_style_text_align(battery_main_label_, LV_TEXT_ALIGN_CENTER, 0);
+
     /* Status bar */
     network_label_ = lv_label_create(status_bar_);
     lv_label_set_text(network_label_, "");
@@ -944,6 +959,30 @@ setenv("TZ", "UTC0", 1);
     snprintf(date_str, sizeof(date_str), "%02d.%02d.%04d",
              timeinfo.tm_mday, timeinfo.tm_mon + 1, timeinfo.tm_year + 1900);
     lv_label_set_text(date_label_, date_str);
+
+    // Обновляем день недели
+    static const char *weekdays[] = {
+        "Воскресенье", "Понедельник", "Вторник", "Среда",
+        "Четверг", "Пятница", "Суббота"
+    };
+    if (weekday_label_ && timeinfo.tm_wday >= 0 && timeinfo.tm_wday <= 6) {
+        lv_label_set_text(weekday_label_, weekdays[timeinfo.tm_wday]);
+    }
+    // Обновляем процент батареи
+    auto& board = Board::GetInstance();
+    int battery_level;
+    bool charging, discharging;
+    if (board.GetBatteryLevel(battery_level, charging, discharging)) {
+        if (battery_main_label_) {
+            char bat_str[32];
+            if (charging) {
+                snprintf(bat_str, sizeof(bat_str), "🔋 %d%% (заряжается)", battery_level);
+            } else {
+                snprintf(bat_str, sizeof(bat_str), "🔋 %d%%", battery_level);
+            }
+            lv_label_set_text(battery_main_label_, bat_str);
+        }
+    }
 }
 
 void LcdDisplay::SetEmotion(const char* emotion) {
@@ -1041,6 +1080,20 @@ void LcdDisplay::SetTheme(Theme* theme) {
     // Set parent text color
     lv_obj_set_style_text_font(screen, text_font, 0);
     lv_obj_set_style_text_color(screen, lvgl_theme->text_color(), 0);
+  
+    // Перекрашиваем наши новые элементы
+    if (clock_label_) {
+        lv_obj_set_style_text_color(clock_label_, lvgl_theme->text_color(), 0);
+    }
+    if (date_label_) {
+        lv_obj_set_style_text_color(date_label_, lvgl_theme->text_color(), 0);
+    }
+    if (weekday_label_) {
+        lv_obj_set_style_text_color(weekday_label_, lvgl_theme->text_color(), 0);
+    }
+    if (battery_main_label_) {
+        lv_obj_set_style_text_color(battery_main_label_, lvgl_theme->text_color(), 0);
+    }
 
     // Set background image
     if (lvgl_theme->background_image() != nullptr) {
