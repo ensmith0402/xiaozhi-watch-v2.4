@@ -766,6 +766,11 @@ void LcdDisplay::SetupUI() {
     lv_obj_set_style_bg_color(screen_controls_, lvgl_theme->background_color(), 0);
     lv_obj_set_style_text_font(screen_controls_, text_font, 0);
     lv_obj_set_style_text_color(screen_controls_, lvgl_theme->text_color(), 0);
+
+    screen_calendar_ = lv_obj_create(NULL);
+    lv_obj_set_style_bg_color(screen_calendar_, lvgl_theme->background_color(), 0);
+    lv_obj_set_style_text_font(screen_calendar_, text_font, 0);
+    lv_obj_set_style_text_color(screen_calendar_, lvgl_theme->text_color(), 0);
     lv_obj_set_style_bg_color(screen_assistant_, lvgl_theme->background_color(), 0);
     lv_obj_set_style_text_font(screen_assistant_, text_font, 0);
     lv_obj_set_style_text_color(screen_assistant_, lvgl_theme->text_color(), 0);
@@ -929,6 +934,7 @@ void LcdDisplay::SetupUI() {
     lv_obj_set_width(volume_slider, LV_HOR_RES * 0.8);
     lv_slider_set_range(volume_slider, 0, 100);
     lv_slider_set_value(volume_slider, 50, LV_ANIM_OFF);
+
     lv_obj_add_event_cb(volume_slider, [](lv_event_t* e) {
         lv_obj_t* slider = (lv_obj_t*)lv_event_get_target(e);
         lv_obj_t* label = (lv_obj_t*)lv_event_get_user_data(e);
@@ -953,11 +959,14 @@ void LcdDisplay::SetupUI() {
 
     status_label_ = lv_label_create(status_bar_);
     // === ПЕРЕКЛЮЧЕНИЕ СВАЙПОМ ===
-    lv_obj_add_event_cb(screen_clock_, [](lv_event_t* e) {
+        lv_obj_add_event_cb(screen_clock_, [](lv_event_t* e) {
         LcdDisplay* display = (LcdDisplay*)lv_event_get_user_data(e);
-        if (lv_indev_get_gesture_dir(lv_indev_active()) == LV_DIR_LEFT) {
+        lv_dir_t dir = lv_indev_get_gesture_dir(lv_indev_active());
+        if (dir == LV_DIR_LEFT) {
             lv_screen_load_anim(display->screen_assistant_, LV_SCR_LOAD_ANIM_MOVE_LEFT, 300, 0, false);
             display->showing_assistant_ = true;
+        } else if (dir == LV_DIR_RIGHT) {
+            lv_screen_load_anim(display->screen_calendar_, LV_SCR_LOAD_ANIM_MOVE_RIGHT, 300, 0, false);
         }
     }, LV_EVENT_GESTURE, this);
 
@@ -978,6 +987,41 @@ void LcdDisplay::SetupUI() {
             lv_screen_load_anim(display->screen_assistant_, LV_SCR_LOAD_ANIM_MOVE_RIGHT, 300, 0, false);
         }
     }, LV_EVENT_GESTURE, this);
+
+     lv_obj_add_event_cb(screen_calendar_, [](lv_event_t* e) {
+        LcdDisplay* display = (LcdDisplay*)lv_event_get_user_data(e);
+        if (lv_indev_get_gesture_dir(lv_indev_active()) == LV_DIR_LEFT) {
+            lv_screen_load_anim(display->screen_clock_, LV_SCR_LOAD_ANIM_MOVE_LEFT, 300, 0, false);
+        }
+    }, LV_EVENT_GESTURE, this);
+   
+
+
+    time_t now_cal;
+    struct tm time_cal;
+    time(&now_cal);
+    localtime_r(&now_cal, &time_cal);
+
+    lv_obj_t* calendar = lv_calendar_create(screen_calendar_);
+    lv_obj_set_size(calendar, LV_HOR_RES - 80, LV_VER_RES - 60);
+    lv_obj_align(calendar, LV_ALIGN_CENTER, 0, 0);
+
+    static const char* day_names[7] = {"Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"};
+    lv_calendar_set_day_names(calendar, day_names);
+
+    lv_calendar_set_today_date(calendar, time_cal.tm_year + 1900, time_cal.tm_mon + 1, time_cal.tm_mday);
+    lv_calendar_set_showed_date(calendar, time_cal.tm_year + 1900, time_cal.tm_mon + 1);
+    lv_calendar_header_arrow_create(calendar);
+    /* Тёмная тема для календаря */
+    lv_obj_set_style_bg_color(calendar, lvgl_theme->background_color(), LV_PART_MAIN);
+    lv_obj_set_style_bg_opa(calendar, LV_OPA_COVER, LV_PART_MAIN);
+    lv_obj_set_style_text_color(calendar, lvgl_theme->text_color(), LV_PART_MAIN);
+    lv_obj_set_style_border_width(calendar, 0, LV_PART_MAIN);
+    lv_obj_set_style_bg_color(calendar, lvgl_theme->background_color(), LV_PART_ITEMS);
+    lv_obj_set_style_text_color(calendar, lvgl_theme->text_color(), LV_PART_ITEMS);
+    lv_obj_set_style_text_color(calendar, lvgl_theme->text_color(), LV_PART_ITEMS | LV_STATE_DEFAULT);
+
+
     lv_obj_set_flex_grow(status_label_, 1);
     lv_label_set_long_mode(status_label_, LV_LABEL_LONG_SCROLL_CIRCULAR);
     lv_obj_set_style_text_align(status_label_, LV_TEXT_ALIGN_CENTER, 0);
@@ -1098,7 +1142,11 @@ setenv("TZ", "UTC0", 1);
     if (weekday_label_ && timeinfo.tm_wday >= 0 && timeinfo.tm_wday <= 6) {
         lv_label_set_text(weekday_label_, weekdays[timeinfo.tm_wday]);
     }
-    // Обновляем процент батареи
+    // Обновляем процент батареи (раз в 30 секунд)
+    static int battery_counter = 0;
+    battery_counter++;
+    if (battery_counter >= 30) {
+        battery_counter = 0;
     auto& board = Board::GetInstance();
     int battery_level;
     bool charging, discharging;
@@ -1113,7 +1161,9 @@ setenv("TZ", "UTC0", 1);
             lv_label_set_text(battery_main_label_, bat_str);
         }
     }
+    }
 }
+
 
 void LcdDisplay::SetEmotion(const char* emotion) {
     // Stop any running GIF animation

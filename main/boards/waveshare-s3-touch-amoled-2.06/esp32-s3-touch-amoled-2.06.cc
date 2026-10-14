@@ -141,15 +141,18 @@ private:
     CustomLcdDisplay* display_;
     CustomBacklight* backlight_;
     PowerSaveTimer* power_save_timer_;
+    esp_lcd_touch_handle_t touch_handle_ = nullptr;
 
     void InitializePowerSaveTimer() {
-        power_save_timer_ = new PowerSaveTimer(-1, 10, 120);
+        power_save_timer_ = new PowerSaveTimer(80, 10, 120);
         power_save_timer_->OnEnterSleepMode([this]() {
             GetDisplay()->SetPowerSaveMode(true);
-            GetBacklight()->SetBrightness(0); });
+            GetBacklight()->SetBrightness(0);
+            if (touch_handle_) esp_lcd_touch_enter_sleep(touch_handle_); });
         power_save_timer_->OnExitSleepMode([this]() {
             GetDisplay()->SetPowerSaveMode(false);
-            GetBacklight()->RestoreBrightness(); });
+            GetBacklight()->RestoreBrightness();
+            if (touch_handle_) esp_lcd_touch_exit_sleep(touch_handle_); });
         power_save_timer_->OnShutdownRequest([this](){ 
             EnterDeepSleep(); });
         power_save_timer_->SetEnabled(true);  // Включаем таймер сразу
@@ -267,6 +270,7 @@ private:
         ESP_ERROR_CHECK(esp_lcd_new_panel_io_i2c(i2c_bus_, &tp_io_config, &tp_io_handle));
         ESP_LOGI(TAG, "Initialize touch controller");
         ESP_ERROR_CHECK(esp_lcd_touch_new_i2c_ft5x06(tp_io_handle, &tp_cfg, &tp));
+        touch_handle_ = tp;
         const lvgl_port_touch_cfg_t touch_cfg = {
             .disp = lv_display_get_default(),
             .handle = tp,

@@ -40,6 +40,7 @@ protected:
     lv_obj_t* assistant_status_label_ = nullptr;
     lv_obj_t* assistant_chat_label_ = nullptr;
     lv_obj_t* screen_controls_ = nullptr;
+    lv_obj_t* screen_calendar_ = nullptr;
     lv_obj_t* controls_brightness_label_ = nullptr;
     lv_obj_t* controls_volume_label_ = nullptr;
     bool showing_assistant_ = false;
