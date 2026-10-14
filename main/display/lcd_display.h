@@ -34,6 +34,15 @@ protected:
     std::unique_ptr<LvglGif> gif_controller_ = nullptr;
     lv_obj_t* emoji_box_ = nullptr;
     lv_obj_t* chat_message_label_ = nullptr;
+    lv_obj_t* screen_clock_ = nullptr;
+    lv_obj_t* screen_assistant_ = nullptr;
+    lv_obj_t* assistant_content_ = nullptr;
+    lv_obj_t* assistant_status_label_ = nullptr;
+    lv_obj_t* assistant_chat_label_ = nullptr;
+    lv_obj_t* screen_controls_ = nullptr;
+    lv_obj_t* controls_brightness_label_ = nullptr;
+    lv_obj_t* controls_volume_label_ = nullptr;
+    bool showing_assistant_ = false;
     esp_timer_handle_t preview_timer_ = nullptr;
     std::unique_ptr<LvglImage> preview_image_cached_ = nullptr;
 
@@ -42,6 +51,7 @@ protected:
     virtual bool Lock(int timeout_ms = 0) override;
     virtual void Unlock() override;
     virtual void UpdateStatusBar(bool update_all = false) override;
+    virtual void SetStatus(const char* status) override;
 
 protected:
     // 添加protected构造函数

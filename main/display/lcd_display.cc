@@ -14,6 +14,7 @@
 #include <cstring>
 
 #include "board.h"
+#include "audio_codec.h"
 
 #define TAG "LcdDisplay"
 
@@ -357,9 +358,6 @@ void LcdDisplay::SetupUI() {
     auto text_font = lvgl_theme->text_font()->font();
     auto icon_font = lvgl_theme->icon_font()->font();
     auto large_icon_font = lvgl_theme->large_icon_font()->font();
-
-    auto screen = lv_screen_active();
-    lv_obj_set_style_text_font(screen, text_font, 0);
     lv_obj_set_style_text_color(screen, lvgl_theme->text_color(), 0);
     lv_obj_set_style_bg_color(screen, lvgl_theme->background_color(), 0);
 
@@ -749,15 +747,32 @@ void LcdDisplay::SetPreviewImage(std::unique_ptr<LvglImage> image) {
     // Auto-scroll to the image bubble
     lv_obj_scroll_to_view_recursive(img_bubble, LV_ANIM_ON);
 }
-#else
+#endif
 void LcdDisplay::SetupUI() {
     DisplayLockGuard lock(this);
     LvglTheme* lvgl_theme = static_cast<LvglTheme*>(current_theme_);
     auto text_font = lvgl_theme->text_font()->font();
     auto icon_font = lvgl_theme->icon_font()->font();
     auto large_icon_font = lvgl_theme->large_icon_font()->font();
+    // === ДВА ЭКРАНА ===
+    screen_clock_ = lv_obj_create(NULL);
+    lv_obj_set_style_bg_color(screen_clock_, lvgl_theme->background_color(), 0);
+    lv_obj_set_style_text_font(screen_clock_, text_font, 0);
+    lv_obj_set_style_text_color(screen_clock_, lvgl_theme->text_color(), 0);
 
-    auto screen = lv_screen_active();
+    screen_assistant_ = lv_obj_create(NULL);
+
+    screen_controls_ = lv_obj_create(NULL);
+    lv_obj_set_style_bg_color(screen_controls_, lvgl_theme->background_color(), 0);
+    lv_obj_set_style_text_font(screen_controls_, text_font, 0);
+    lv_obj_set_style_text_color(screen_controls_, lvgl_theme->text_color(), 0);
+    lv_obj_set_style_bg_color(screen_assistant_, lvgl_theme->background_color(), 0);
+    lv_obj_set_style_text_font(screen_assistant_, text_font, 0);
+    lv_obj_set_style_text_color(screen_assistant_, lvgl_theme->text_color(), 0);
+
+    lv_screen_load(screen_clock_);
+
+    auto screen = screen_clock_;
     lv_obj_set_style_text_font(screen, text_font, 0);
     lv_obj_set_style_text_color(screen, lvgl_theme->text_color(), 0);
     lv_obj_set_style_bg_color(screen, lvgl_theme->background_color(), 0);
@@ -816,6 +831,7 @@ void LcdDisplay::SetupUI() {
     lv_label_set_long_mode(chat_message_label_, LV_LABEL_LONG_WRAP); // 设置为自动换行模式
     lv_obj_set_style_text_align(chat_message_label_, LV_TEXT_ALIGN_CENTER, 0); // 设置文本居中对齐
     lv_obj_set_style_text_color(chat_message_label_, lvgl_theme->text_color(), 0);
+    lv_obj_add_flag(chat_message_label_, LV_OBJ_FLAG_HIDDEN);
         /* Часы — большой шрифт */
     clock_label_ = lv_label_create(content_);
     lv_label_set_text(clock_label_, "--:--");
@@ -840,10 +856,88 @@ void LcdDisplay::SetupUI() {
     /* Батарея — под днём недели */
     battery_main_label_ = lv_label_create(content_);
     lv_label_set_text(battery_main_label_, "");
-    lv_obj_set_style_text_font(battery_main_label_, &BUILTIN_TEXT_FONT, 0);
-    lv_obj_set_style_text_color(battery_main_label_, lvgl_theme->text_color(), 0);
-    lv_obj_set_style_text_align(battery_main_label_, LV_TEXT_ALIGN_CENTER, 0);
 
+    /* === ЭКРАН АССИСТЕНТА === */
+    assistant_content_ = lv_obj_create(screen_assistant_);
+    lv_obj_set_size(assistant_content_, LV_HOR_RES, LV_VER_RES);
+    lv_obj_set_style_radius(assistant_content_, 0, 0);
+    lv_obj_set_style_border_width(assistant_content_, 0, 0);
+    lv_obj_set_style_bg_color(assistant_content_, lvgl_theme->background_color(), 0);
+    lv_obj_set_flex_flow(assistant_content_, LV_FLEX_FLOW_COLUMN);
+    lv_obj_set_flex_align(assistant_content_, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+
+    assistant_status_label_ = lv_label_create(assistant_content_);
+    lv_label_set_text(assistant_status_label_, "🎤 Ассистент");
+    lv_obj_set_style_text_font(assistant_status_label_, text_font, 0);
+    lv_obj_set_style_text_color(assistant_status_label_, lvgl_theme->text_color(), 0);
+    lv_obj_set_style_text_align(assistant_status_label_, LV_TEXT_ALIGN_CENTER, 0);
+
+    assistant_chat_label_ = lv_label_create(assistant_content_);
+    lv_label_set_text(assistant_chat_label_, "");
+    lv_obj_set_width(assistant_chat_label_, width_ * 0.9);
+    lv_label_set_long_mode(assistant_chat_label_, LV_LABEL_LONG_WRAP);
+    lv_obj_set_style_text_align(assistant_chat_label_, LV_TEXT_ALIGN_CENTER, 0);
+    lv_obj_set_style_text_color(assistant_chat_label_, lvgl_theme->text_color(), 0);
+
+    /* === ЭКРАН УПРАВЛЕНИЯ === */
+    lv_obj_t* controls_content = lv_obj_create(screen_controls_);
+    lv_obj_set_size(controls_content, LV_HOR_RES, LV_VER_RES);
+    lv_obj_set_style_radius(controls_content, 0, 0);
+    lv_obj_set_style_border_width(controls_content, 0, 0);
+    lv_obj_set_style_bg_color(controls_content, lvgl_theme->background_color(), 0);
+    lv_obj_set_flex_flow(controls_content, LV_FLEX_FLOW_COLUMN);
+    lv_obj_set_flex_align(controls_content, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+    lv_obj_set_style_pad_all(controls_content, lvgl_theme->spacing(4), 0);
+
+    /* Иконка яркости + слайдер */
+    lv_obj_t* brightness_icon = lv_label_create(controls_content);
+    lv_label_set_text(brightness_icon, FONT_AWESOME_SUN);
+    lv_obj_set_style_text_font(brightness_icon, icon_font, 0);
+    lv_obj_set_style_text_color(brightness_icon, lvgl_theme->text_color(), 0);
+
+    controls_brightness_label_ = lv_label_create(controls_content);
+    lv_label_set_text(controls_brightness_label_, "50%");
+    lv_obj_set_style_text_font(controls_brightness_label_, text_font, 0);
+    lv_obj_set_style_text_color(controls_brightness_label_, lvgl_theme->text_color(), 0);
+
+    lv_obj_t* brightness_slider = lv_slider_create(controls_content);
+    lv_obj_set_width(brightness_slider, LV_HOR_RES * 0.8);
+    lv_slider_set_range(brightness_slider, 0, 100);
+    lv_slider_set_value(brightness_slider, 50, LV_ANIM_OFF);
+    lv_obj_add_event_cb(brightness_slider, [](lv_event_t* e) {
+        lv_obj_t* slider = (lv_obj_t*)lv_event_get_target(e);
+        lv_obj_t* label = (lv_obj_t*)lv_event_get_user_data(e);
+        int value = lv_slider_get_value(slider);
+        char buf[8];
+        snprintf(buf, sizeof(buf), "%d%%", value);
+        lv_label_set_text(label, buf);
+        Board::GetInstance().GetBacklight()->SetBrightness(value);
+    }, LV_EVENT_VALUE_CHANGED, controls_brightness_label_);
+
+    /* Иконка громкости + слайдер */
+    lv_obj_t* volume_icon = lv_label_create(controls_content);
+    lv_label_set_text(volume_icon, FONT_AWESOME_VOLUME_HIGH);
+    lv_obj_set_style_text_font(volume_icon, icon_font, 0);
+    lv_obj_set_style_text_color(volume_icon, lvgl_theme->text_color(), 0);
+
+    controls_volume_label_ = lv_label_create(controls_content);
+    lv_label_set_text(controls_volume_label_, "50%");
+    lv_obj_set_style_text_font(controls_volume_label_, text_font, 0);
+    lv_obj_set_style_text_color(controls_volume_label_, lvgl_theme->text_color(), 0);
+
+    lv_obj_t* volume_slider = lv_slider_create(controls_content);
+    lv_obj_set_width(volume_slider, LV_HOR_RES * 0.8);
+    lv_slider_set_range(volume_slider, 0, 100);
+    lv_slider_set_value(volume_slider, 50, LV_ANIM_OFF);
+    lv_obj_add_event_cb(volume_slider, [](lv_event_t* e) {
+        lv_obj_t* slider = (lv_obj_t*)lv_event_get_target(e);
+        lv_obj_t* label = (lv_obj_t*)lv_event_get_user_data(e);
+        int value = lv_slider_get_value(slider);
+        char buf[8];
+        snprintf(buf, sizeof(buf), "%d%%", value);
+        lv_label_set_text(label, buf);
+        Board::GetInstance().GetAudioCodec()->SetOutputVolume(value);
+    }, LV_EVENT_VALUE_CHANGED, controls_volume_label_);
     /* Status bar */
     network_label_ = lv_label_create(status_bar_);
     lv_label_set_text(network_label_, "");
@@ -858,6 +952,32 @@ void LcdDisplay::SetupUI() {
     lv_obj_add_flag(notification_label_, LV_OBJ_FLAG_HIDDEN);
 
     status_label_ = lv_label_create(status_bar_);
+    // === ПЕРЕКЛЮЧЕНИЕ СВАЙПОМ ===
+    lv_obj_add_event_cb(screen_clock_, [](lv_event_t* e) {
+        LcdDisplay* display = (LcdDisplay*)lv_event_get_user_data(e);
+        if (lv_indev_get_gesture_dir(lv_indev_active()) == LV_DIR_LEFT) {
+            lv_screen_load_anim(display->screen_assistant_, LV_SCR_LOAD_ANIM_MOVE_LEFT, 300, 0, false);
+            display->showing_assistant_ = true;
+        }
+    }, LV_EVENT_GESTURE, this);
+
+    lv_obj_add_event_cb(screen_assistant_, [](lv_event_t* e) {
+        LcdDisplay* display = (LcdDisplay*)lv_event_get_user_data(e);
+        lv_dir_t dir = lv_indev_get_gesture_dir(lv_indev_active());
+        if (dir == LV_DIR_RIGHT) {
+            lv_screen_load_anim(display->screen_clock_, LV_SCR_LOAD_ANIM_MOVE_RIGHT, 300, 0, false);
+            display->showing_assistant_ = false;
+        } else if (dir == LV_DIR_LEFT) {
+            lv_screen_load_anim(display->screen_controls_, LV_SCR_LOAD_ANIM_MOVE_LEFT, 300, 0, false);
+        }
+    }, LV_EVENT_GESTURE, this);
+
+    lv_obj_add_event_cb(screen_controls_, [](lv_event_t* e) {
+        LcdDisplay* display = (LcdDisplay*)lv_event_get_user_data(e);
+        if (lv_indev_get_gesture_dir(lv_indev_active()) == LV_DIR_RIGHT) {
+            lv_screen_load_anim(display->screen_assistant_, LV_SCR_LOAD_ANIM_MOVE_RIGHT, 300, 0, false);
+        }
+    }, LV_EVENT_GESTURE, this);
     lv_obj_set_flex_grow(status_label_, 1);
     lv_label_set_long_mode(status_label_, LV_LABEL_LONG_SCROLL_CIRCULAR);
     lv_obj_set_style_text_align(status_label_, LV_TEXT_ALIGN_CENTER, 0);
@@ -925,14 +1045,24 @@ void LcdDisplay::SetPreviewImage(std::unique_ptr<LvglImage> image) {
     ESP_ERROR_CHECK(esp_timer_start_once(preview_timer_, PREVIEW_IMAGE_DURATION_MS * 1000));
 }
 
+void LcdDisplay::SetStatus(const char* status) {
+    Display::SetStatus(status);
+    if (assistant_status_label_ != nullptr) {
+        DisplayLockGuard lock(this);
+        lv_label_set_text(assistant_status_label_, status);
+    }
+}
+
 void LcdDisplay::SetChatMessage(const char* role, const char* content) {
     DisplayLockGuard lock(this);
     if (chat_message_label_ == nullptr) {
         return;
     }
     lv_label_set_text(chat_message_label_, content);
+    if (assistant_chat_label_ != nullptr) {
+        lv_label_set_text(assistant_chat_label_, content);
+    }
 }
-#endif
 
 void LcdDisplay::UpdateStatusBar(bool update_all) {
     DisplayLockGuard lock(this);
@@ -988,7 +1118,6 @@ setenv("TZ", "UTC0", 1);
 void LcdDisplay::SetEmotion(const char* emotion) {
     // Stop any running GIF animation
     if (gif_controller_) {
-        DisplayLockGuard lock(this);
         gif_controller_->Stop();
         gif_controller_.reset();
     }
@@ -1065,9 +1194,8 @@ void LcdDisplay::SetTheme(Theme* theme) {
     // Set font
     auto text_font = lvgl_theme->text_font()->font();
     auto icon_font = lvgl_theme->icon_font()->font();
-    auto large_icon_font = lvgl_theme->large_icon_font()->font();
-
     if (text_font->line_height >= 40) {
+    auto large_icon_font = lvgl_theme->large_icon_font()->font();
         lv_obj_set_style_text_font(mute_label_, large_icon_font, 0);
         lv_obj_set_style_text_font(battery_label_, large_icon_font, 0);
         lv_obj_set_style_text_font(network_label_, large_icon_font, 0);
@@ -1187,6 +1315,7 @@ void LcdDisplay::SetTheme(Theme* theme) {
     // Simple UI mode - just update the main chat message
     if (chat_message_label_ != nullptr) {
         lv_obj_set_style_text_color(chat_message_label_, lvgl_theme->text_color(), 0);
+    lv_obj_add_flag(chat_message_label_, LV_OBJ_FLAG_HIDDEN);
     }
     
     if (emoji_label_ != nullptr) {
